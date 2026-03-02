@@ -1,9 +1,10 @@
-fastapi
-uvicorn
-pandas
-numpy
-faiss-cpu
-sentence-transformers
-scikit-learn
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+pandas==2.2.2
+numpy==1.26.4
+faiss-cpu==1.7.4
+sentence-transformers==2.6.1
+scikit-learn==1.4.2
 requests
 beautifulsoup4
+torch==2.2.2
