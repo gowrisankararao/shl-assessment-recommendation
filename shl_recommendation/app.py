@@ -14,13 +14,13 @@ app = FastAPI()
 # -----------------------------
 # Configuration & Paths
 # -----------------------------
-# This logic ensures it finds the models inside shl_recommendation
+# This logic ensures it finds the 'models' folder inside 'shl_recommendation'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 metadata_path = os.path.join(MODEL_DIR, "metadata.pkl")
 index_path = os.path.join(MODEL_DIR, "faiss_index.index")
 
-# Global variables for lazy loading (Crucial for 512MB RAM limit)
+# Global variables for lazy loading (Crucial for Render's 512MB RAM limit)
 _model = None
 _index = None
 _df = None
@@ -33,17 +33,19 @@ def get_resources():
     global _model, _index, _df
     
     if _model is None:
-        # Crucial for Render: Prevent CPU/RAM spikes
+        # Prevents CPU/RAM spikes during initialization on the free tier
         torch.set_num_threads(1)
         _model = SentenceTransformer("paraphrase-MiniLM-L3-v2")
     
     if _df is None:
         if not os.path.exists(metadata_path):
-            raise FileNotFoundError(f"Missing file: {metadata_path}. Ensure 'models' is inside 'shl_recommendation'.")
+            raise FileNotFoundError(f"Metadata file not found at: {metadata_path}")
         with open(metadata_path, "rb") as f:
             _df = pickle.load(f)
             
     if _index is None:
+        if not os.path.exists(index_path):
+            raise FileNotFoundError(f"Index file not found at: {index_path}")
         _index = faiss.read_index(index_path)
     
     return _model, _index, _df
@@ -62,28 +64,25 @@ def recommend(request: QueryRequest):
     if not query:
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
-    # Load resources lazily
+    # Load resources lazily only when the endpoint is called
     model, index, df = get_resources()
 
-    # Generate Embeddings
+    # Generate Embeddings & Search
     query_embedding = model.encode([query], convert_to_numpy=True).astype("float32")
     faiss.normalize_L2(query_embedding)
-
-    # Search top 15 candidates
     scores, indices = index.search(query_embedding, 15)
 
     results = []
     used_types = set()
 
     for idx in indices[0]:
-        if idx >= len(df) or idx < 0:
-            continue
+        if idx >= len(df) or idx < 0: continue
         
         row = df.iloc[idx]
         test_type_raw = str(row.get("test_type", "")).strip()
         test_type_list = [t.strip() for t in test_type_raw.split(",") if t.strip()]
 
-        # Balancing Logic: Variety of test types or fill up to 5
+        # Balance recommendation variety or fill to minimum requirement
         if any(t not in used_types for t in test_type_list) or len(results) < 5:
             try:
                 duration = int(float(row.get("duration", 0)))
@@ -101,8 +100,7 @@ def recommend(request: QueryRequest):
             })
             used_types.update(test_type_list)
 
-        if len(results) == 10:
-            break
+        if len(results) == 10: break
 
     return {"recommended_assessments": results}
 
@@ -120,7 +118,7 @@ def frontend():
     <title>SHL Smart Recommender</title>
     <style>
         :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 40px; margin: 0; min-height: 100vh; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 40px; margin: 0; min-height: 100vh; }
         .container { max-width: 850px; margin: auto; }
         h2 { text-align: center; color: var(--accent); font-size: 2.2rem; margin-bottom: 30px; }
         textarea { width: 100%; padding: 18px; border-radius: 12px; border: 1px solid #334155; background: #1e293b; color: white; font-size: 16px; margin-bottom: 20px; box-sizing: border-box; }
@@ -131,16 +129,16 @@ def frontend():
         .card h3 { margin-top: 0; color: var(--accent); }
         .meta { font-size: 14px; color: #94a3b8; margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; }
         .badge { background: #0f172a; padding: 5px 12px; border-radius: 6px; border: 1px solid #334155; }
-        a { color: var(--accent); text-decoration: none; font-weight: bold; display: inline-block; margin-top: 20px; border-bottom: 2px solid transparent; }
-        a:hover { border-bottom: 2px solid var(--accent); }
+        a { color: var(--accent); text-decoration: none; font-weight: bold; display: inline-block; margin-top: 20px; transition: 0.2s; }
+        a:hover { opacity: 0.8; text-decoration: underline; }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>SHL Assessment Recommendation</h2>
-        <textarea id="query" rows="5" placeholder="Paste a Job Description or type your hiring needs..."></textarea>
+        <textarea id="query" rows="5" placeholder="Paste a Job Description or enter hiring requirements..."></textarea>
         <button onclick="search()">Find Best Assessments</button>
-        <div id="loading">Connecting to AI Model... (Takes 15s on first search)</div>
+        <div id="loading">Connecting to Model... (Initial load may take ~15s)</div>
         <div id="results"></div>
     </div>
 
@@ -179,12 +177,12 @@ def frontend():
                                 <span class="badge">🌐 Remote: ${item.remote_support}</span>
                                 <span class="badge">🏷 ${item.test_type.join(", ")}</span>
                             </div>
-                            <a href="${item.url}" target="_blank">View in SHL Catalog →</a>
+                            <a href="${item.url}" target="_blank">View Assessment Details →</a>
                         </div>`;
                 });
             } catch (err) {
                 loader.style.display = "none";
-                resultsDiv.innerHTML = "<p style='color:red; text-align:center;'>Instance is waking up. Please try again in 15 seconds.</p>";
+                resultsDiv.innerHTML = "<p style='color:red; text-align:center;'>Server is waking up. Please try again in 10-15 seconds.</p>";
             }
         }
     </script>
