@@ -30,7 +30,7 @@ with open(metadata_path, "rb") as f:
 
 index = faiss.read_index(index_path)
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
+model = SentenceTransformer("paraphrase-MiniLM-L3-v2")
 
 
 # -----------------------------

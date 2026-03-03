@@ -49,7 +49,7 @@ if "combined_text" not in df.columns:
 # Load embedding model
 # --------------------------------------------------
 print("Loading embedding model...")
-model = SentenceTransformer("all-MiniLM-L6-v2")
+model = SentenceTransformer("paraphrase-MiniLM-L3-v2")
 
 texts = df["combined_text"].astype(str).tolist()
 
