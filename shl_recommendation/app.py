@@ -14,13 +14,12 @@ app = FastAPI()
 # -----------------------------
 # Configuration & Paths
 # -----------------------------
-# This logic ensures it finds the 'models' folder inside 'shl_recommendation'
+# Correctly identifies the 'models' folder inside 'shl_recommendation'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 metadata_path = os.path.join(MODEL_DIR, "metadata.pkl")
 index_path = os.path.join(MODEL_DIR, "faiss_index.index")
 
-# Global variables for lazy loading (Crucial for Render's 512MB RAM limit)
 _model = None
 _index = None
 _df = None
@@ -29,30 +28,20 @@ class QueryRequest(BaseModel):
     query: str
 
 def get_resources():
-    """Load model and data only when the first request hits the API."""
+    """Lazy load resources to stay under Render's 512MB RAM limit."""
     global _model, _index, _df
-    
     if _model is None:
-        # Prevents CPU/RAM spikes during initialization on the free tier
-        torch.set_num_threads(1)
+        torch.set_num_threads(1) 
         _model = SentenceTransformer("paraphrase-MiniLM-L3-v2")
     
     if _df is None:
-        if not os.path.exists(metadata_path):
-            raise FileNotFoundError(f"Metadata file not found at: {metadata_path}")
         with open(metadata_path, "rb") as f:
             _df = pickle.load(f)
             
     if _index is None:
-        if not os.path.exists(index_path):
-            raise FileNotFoundError(f"Index file not found at: {index_path}")
         _index = faiss.read_index(index_path)
     
     return _model, _index, _df
-
-# -----------------------------
-# API Endpoints
-# -----------------------------
 
 @app.get("/health")
 def health_check():
@@ -64,10 +53,7 @@ def recommend(request: QueryRequest):
     if not query:
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
-    # Load resources lazily only when the endpoint is called
     model, index, df = get_resources()
-
-    # Generate Embeddings & Search
     query_embedding = model.encode([query], convert_to_numpy=True).astype("float32")
     faiss.normalize_L2(query_embedding)
     scores, indices = index.search(query_embedding, 15)
@@ -77,36 +63,25 @@ def recommend(request: QueryRequest):
 
     for idx in indices[0]:
         if idx >= len(df) or idx < 0: continue
-        
         row = df.iloc[idx]
         test_type_raw = str(row.get("test_type", "")).strip()
         test_type_list = [t.strip() for t in test_type_raw.split(",") if t.strip()]
 
-        # Balance recommendation variety or fill to minimum requirement
         if any(t not in used_types for t in test_type_list) or len(results) < 5:
-            try:
-                duration = int(float(row.get("duration", 0)))
-            except:
-                duration = 0
-
             results.append({
                 "url": str(row.get("url", "")),
                 "name": str(row.get("name", "")),
                 "adaptive_support": "Yes" if str(row.get("adaptive_support", "")).lower() == "yes" else "No",
                 "description": str(row.get("description", "")),
-                "duration": duration,
+                "duration": int(float(row.get("duration", 0))),
                 "remote_support": "Yes" if str(row.get("remote_support", "")).lower() == "yes" else "No",
-                "test_type": test_type_list if test_type_list else ["Not specified"]
+                "test_type": test_type_list or ["Not specified"]
             })
             used_types.update(test_type_list)
-
         if len(results) == 10: break
 
     return {"recommended_assessments": results}
 
-# -----------------------------
-# Professional Frontend UI
-# -----------------------------
 @app.get("/", response_class=HTMLResponse)
 def frontend():
     return """
@@ -118,27 +93,25 @@ def frontend():
     <title>SHL Smart Recommender</title>
     <style>
         :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 40px; margin: 0; min-height: 100vh; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 40px; margin: 0; min-height: 100vh; }
         .container { max-width: 850px; margin: auto; }
-        h2 { text-align: center; color: var(--accent); font-size: 2.2rem; margin-bottom: 30px; }
+        h2 { text-align: center; color: var(--accent); font-size: 2rem; }
         textarea { width: 100%; padding: 18px; border-radius: 12px; border: 1px solid #334155; background: #1e293b; color: white; font-size: 16px; margin-bottom: 20px; box-sizing: border-box; }
-        button { width: 100%; background: var(--accent); color: #0f172a; border: none; padding: 16px; border-radius: 10px; font-weight: bold; font-size: 1.1rem; cursor: pointer; transition: 0.3s; }
+        button { width: 100%; background: var(--accent); color: #0f172a; border: none; padding: 16px; border-radius: 10px; font-weight: bold; font-size: 1rem; cursor: pointer; transition: 0.3s; }
         button:hover { opacity: 0.9; transform: scale(1.01); }
-        #loading { display: none; text-align: center; margin: 20px; color: var(--accent); font-weight: bold; font-size: 1.1rem; }
-        .card { background: var(--card); padding: 25px; border-radius: 15px; margin-top: 25px; border: 1px solid #334155; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
-        .card h3 { margin-top: 0; color: var(--accent); }
+        #loading { display: none; text-align: center; margin: 20px; color: var(--accent); font-weight: bold; }
+        .card { background: var(--card); padding: 25px; border-radius: 15px; margin-top: 25px; border: 1px solid #334155; }
         .meta { font-size: 14px; color: #94a3b8; margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; }
         .badge { background: #0f172a; padding: 5px 12px; border-radius: 6px; border: 1px solid #334155; }
-        a { color: var(--accent); text-decoration: none; font-weight: bold; display: inline-block; margin-top: 20px; transition: 0.2s; }
-        a:hover { opacity: 0.8; text-decoration: underline; }
+        a { color: var(--accent); text-decoration: none; font-weight: bold; display: inline-block; margin-top: 20px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>SHL Assessment Recommendation</h2>
-        <textarea id="query" rows="5" placeholder="Paste a Job Description or enter hiring requirements..."></textarea>
+        <textarea id="query" rows="5" placeholder="Paste Job Description here..."></textarea>
         <button onclick="search()">Find Best Assessments</button>
-        <div id="loading">Connecting to Model... (Initial load may take ~15s)</div>
+        <div id="loading">Analyzing... (Initial load takes ~15s)</div>
         <div id="results"></div>
     </div>
 
@@ -148,10 +121,8 @@ def frontend():
             const resultsDiv = document.getElementById("results");
             const loader = document.getElementById("loading");
             if(!query.trim()) return alert("Please enter a query.");
-
             resultsDiv.innerHTML = "";
             loader.style.display = "block";
-
             try {
                 const response = await fetch("/recommend", {
                     method: "POST",
@@ -160,12 +131,6 @@ def frontend():
                 });
                 const data = await response.json();
                 loader.style.display = "none";
-
-                if(!data.recommended_assessments || data.recommended_assessments.length === 0){
-                    resultsDiv.innerHTML = "<p style='text-align:center;'>No relevant assessments found.</p>";
-                    return;
-                }
-
                 data.recommended_assessments.forEach(item => {
                     resultsDiv.innerHTML += `
                         <div class="card">
@@ -177,12 +142,12 @@ def frontend():
                                 <span class="badge">🌐 Remote: ${item.remote_support}</span>
                                 <span class="badge">🏷 ${item.test_type.join(", ")}</span>
                             </div>
-                            <a href="${item.url}" target="_blank">View Assessment Details →</a>
+                            <a href="${item.url}" target="_blank">Explore Catalog Details →</a>
                         </div>`;
                 });
             } catch (err) {
                 loader.style.display = "none";
-                resultsDiv.innerHTML = "<p style='color:red; text-align:center;'>Server is waking up. Please try again in 10-15 seconds.</p>";
+                resultsDiv.innerHTML = "<p style='color:red; text-align:center;'>Instance is waking up. Please refresh and try again in 15 seconds.</p>";
             }
         }
     </script>
