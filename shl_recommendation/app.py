@@ -18,18 +18,36 @@ class QueryRequest(BaseModel):
 
 
 # -----------------------------
-# Load Model + FAISS + Metadata
+# Paths
 # -----------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
 metadata_path = os.path.join(BASE_DIR, "models", "metadata.pkl")
 index_path = os.path.join(BASE_DIR, "models", "faiss_index.index")
 
+
+# -----------------------------
+# Auto Build FAISS If Missing
+# -----------------------------
+if not os.path.exists(index_path) or not os.path.exists(metadata_path):
+    print("FAISS index or metadata not found. Building index...")
+    from shl_recommendation.models.build_index import main
+    main()
+
+
+# -----------------------------
+# Load Metadata
+# -----------------------------
 with open(metadata_path, "rb") as f:
     df = pickle.load(f)
 
+# -----------------------------
+# Load FAISS Index
+# -----------------------------
 index = faiss.read_index(index_path)
 
+# -----------------------------
+# Load Embedding Model
+# -----------------------------
 model = SentenceTransformer("paraphrase-MiniLM-L3-v2")
 
 
@@ -56,10 +74,9 @@ def recommend(request: QueryRequest):
     query_embedding = model.encode([query])
     query_embedding = np.array(query_embedding).astype("float32")
 
-    # Normalize (important for cosine similarity in FAISS)
+    # Normalize for cosine similarity
     faiss.normalize_L2(query_embedding)
 
-    # Search top 15
     scores, indices = index.search(query_embedding, 15)
 
     results = []
@@ -78,7 +95,6 @@ def recommend(request: QueryRequest):
         if not test_type_list:
             test_type_list = ["Not specified"]
 
-        # Balance logic
         if any(t not in used_types for t in test_type_list) or len(results) < 5:
 
             try:
@@ -182,7 +198,7 @@ resultsDiv.innerHTML+=card;
 
 
 # -----------------------------
-# LOCAL RUN FIX
+# LOCAL RUN
 # -----------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
