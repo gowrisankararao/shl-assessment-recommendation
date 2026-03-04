@@ -27,15 +27,12 @@ _index = None
 _df = None
 
 
-# -----------------------------
-# Request Model
-# -----------------------------
 class QueryRequest(BaseModel):
     query: str
 
 
 # -----------------------------
-# Lazy Loading (important for Render)
+# Lazy loading (important for Render)
 # -----------------------------
 def get_resources():
 
@@ -56,7 +53,7 @@ def get_resources():
 
 
 # -----------------------------
-# Health Check
+# Health API
 # -----------------------------
 @app.get("/health")
 def health():
@@ -93,7 +90,6 @@ def recommend(request: QueryRequest):
         row = df.iloc[idx]
 
         test_type_raw = str(row.get("test_type", "")).strip()
-
         test_type_list = [t.strip() for t in test_type_raw.split(",") if t.strip()]
 
         if not test_type_list:
@@ -107,7 +103,6 @@ def recommend(request: QueryRequest):
                 duration = 0
 
             adaptive = "Yes" if str(row.get("adaptive_support", "")).lower() == "yes" else "No"
-
             remote = "Yes" if str(row.get("remote_support", "")).lower() == "yes" else "No"
 
             results.append({
@@ -138,6 +133,7 @@ def homepage():
 <!DOCTYPE html>
 <html>
 <head>
+
 <title>SHL Assessment Recommendation</title>
 
 <style>
@@ -194,6 +190,7 @@ color:#38bdf8;
 }
 
 </style>
+
 </head>
 
 <body>
@@ -202,7 +199,10 @@ color:#38bdf8;
 
 <h2>SHL Assessment Recommendation System</h2>
 
-<textarea id="query" rows="4" placeholder="Enter job description or query..."></textarea>
+<textarea id="query" rows="4"
+placeholder="Example: Need a Java developer who collaborates well with teams"></textarea>
+
+<br>
 
 <button onclick="search()">Get Recommendations</button>
 
@@ -218,13 +218,22 @@ const query=document.getElementById("query").value;
 
 const resultsDiv=document.getElementById("results");
 
+if(!query){
+alert("Please enter a query");
+return;
+}
+
 resultsDiv.innerHTML="<p>Loading...</p>";
+
+try{
 
 const response=await fetch("/recommend",{
 
 method:"POST",
 
-headers:{"Content-Type":"application/json"},
+headers:{
+"Content-Type":"application/json"
+},
 
 body:JSON.stringify({query:query})
 
@@ -234,7 +243,7 @@ const data=await response.json();
 
 resultsDiv.innerHTML="";
 
-if(!data.recommended_assessments){
+if(!data.recommended_assessments || data.recommended_assessments.length===0){
 
 resultsDiv.innerHTML="<p>No recommendations found</p>";
 
@@ -274,8 +283,17 @@ resultsDiv.innerHTML+=card;
 
 }
 
+catch(error){
+
+resultsDiv.innerHTML="<p>Server error. Please try again.</p>";
+
+}
+
+}
+
 </script>
 
 </body>
 </html>
+
 """
