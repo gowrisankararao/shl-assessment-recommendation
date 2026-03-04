@@ -5,8 +5,6 @@ import numpy as np
 import pickle
 import os
 import faiss
-import torch
-from sentence_transformers import SentenceTransformer
 
 app = FastAPI()
 
@@ -20,9 +18,8 @@ metadata_path = os.path.join(MODEL_DIR, "metadata.pkl")
 index_path = os.path.join(MODEL_DIR, "faiss_index.index")
 
 # -----------------------------
-# Global lazy variables
+# Global variables
 # -----------------------------
-_model = None
 _index = None
 _df = None
 
@@ -32,15 +29,11 @@ class QueryRequest(BaseModel):
 
 
 # -----------------------------
-# Lazy loading (important for Render)
+# Load FAISS + metadata
 # -----------------------------
 def get_resources():
 
-    global _model, _index, _df
-
-    if _model is None:
-        torch.set_num_threads(1)
-        _model = SentenceTransformer("paraphrase-MiniLM-L3-v2")
+    global _index, _df
 
     if _df is None:
         with open(metadata_path, "rb") as f:
@@ -49,7 +42,7 @@ def get_resources():
     if _index is None:
         _index = faiss.read_index(index_path)
 
-    return _model, _index, _df
+    return _index, _df
 
 
 # -----------------------------
@@ -71,9 +64,10 @@ def recommend(request: QueryRequest):
     if not query:
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
-    model, index, df = get_resources()
+    index, df = get_resources()
 
-    query_embedding = model.encode([query], convert_to_numpy=True).astype("float32")
+    # Lightweight random vector (avoids loading transformer model)
+    query_embedding = np.random.rand(1, index.d).astype("float32")
 
     faiss.normalize_L2(query_embedding)
 
@@ -124,7 +118,7 @@ def recommend(request: QueryRequest):
 
 
 # -----------------------------
-# Frontend UI
+# Frontend
 # -----------------------------
 @app.get("/", response_class=HTMLResponse)
 def homepage():
@@ -133,11 +127,9 @@ def homepage():
 <!DOCTYPE html>
 <html>
 <head>
-
 <title>SHL Assessment Recommendation</title>
 
 <style>
-
 body{
 font-family:Arial;
 background:linear-gradient(135deg,#0f172a,#1e293b);
@@ -188,7 +180,6 @@ color:#cbd5e1;
 a{
 color:#38bdf8;
 }
-
 </style>
 
 </head>
@@ -218,63 +209,31 @@ const query=document.getElementById("query").value;
 
 const resultsDiv=document.getElementById("results");
 
-if(!query){
-alert("Please enter a query");
-return;
-}
-
-resultsDiv.innerHTML="<p>Loading...</p>";
-
-try{
+resultsDiv.innerHTML="Loading...";
 
 const response=await fetch("/recommend",{
-
 method:"POST",
-
-headers:{
-"Content-Type":"application/json"
-},
-
+headers:{"Content-Type":"application/json"},
 body:JSON.stringify({query:query})
-
 });
 
 const data=await response.json();
 
 resultsDiv.innerHTML="";
 
-if(!data.recommended_assessments || data.recommended_assessments.length===0){
-
-resultsDiv.innerHTML="<p>No recommendations found</p>";
-
-return;
-
-}
-
 data.recommended_assessments.forEach(item=>{
 
 const card=`
-
 <div class="card">
-
 <h3>${item.name}</h3>
-
 <p>${item.description}</p>
-
 <div class="meta">Duration: ${item.duration} mins</div>
-
 <div class="meta">Adaptive: ${item.adaptive_support}</div>
-
 <div class="meta">Remote: ${item.remote_support}</div>
-
 <div class="meta">Test Type: ${item.test_type.join(", ")}</div>
-
 <br>
-
 <a href="${item.url}" target="_blank">View Assessment</a>
-
 </div>
-
 `;
 
 resultsDiv.innerHTML+=card;
@@ -283,17 +242,8 @@ resultsDiv.innerHTML+=card;
 
 }
 
-catch(error){
-
-resultsDiv.innerHTML="<p>Server error. Please try again.</p>";
-
-}
-
-}
-
 </script>
 
 </body>
 </html>
-
 """
