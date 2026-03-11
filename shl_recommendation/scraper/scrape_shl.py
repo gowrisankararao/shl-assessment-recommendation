@@ -10,9 +10,7 @@ import re
 
 os.makedirs("shl_recommendation/data", exist_ok=True)
 
-# ----------------------------
-# Chrome Options
-# ----------------------------
+
 options = Options()
 options.add_argument("--start-maximized")
 options.add_argument("--disable-blink-features=AutomationControlled")
@@ -29,9 +27,6 @@ start = 0
 
 print("Collecting product links...\n")
 
-# ----------------------------
-# Collect Links
-# ----------------------------
 while True:
     url = CATALOG_URL.format(start)
     print("Opening:", url)
@@ -60,9 +55,6 @@ while True:
 
 print("\nTotal links collected:", len(all_links))
 
-# ----------------------------
-# Scrape Detail Pages
-# ----------------------------
 data = []
 print("\nScraping detail pages...\n")
 
@@ -77,9 +69,7 @@ for idx, link in enumerate(all_links):
 
         name = driver.find_element(By.TAG_NAME, "h1").text.strip()
 
-        # ----------------------------
-        # Description
-        # ----------------------------
+     
         description = ""
         try:
             meta_desc = driver.find_element(By.XPATH, "//meta[@name='description']")
@@ -89,19 +79,16 @@ for idx, link in enumerate(all_links):
 
         page_text = driver.page_source
 
-        # ----------------------------
-        # Extract Duration (robust)
-        # ----------------------------
+       
         duration = 0
 
-        # Pattern 1: "max 60"
+       
         match = re.search(r"max\s*(\d+)", page_text, re.IGNORECASE)
 
-        # Pattern 2: "60 minutes"
         if not match:
             match = re.search(r"(\d+)\s*minutes", page_text, re.IGNORECASE)
 
-        # Pattern 3: "Completion Time in minutes = max 60"
+       
         if not match:
             match = re.search(r"Completion Time.*?(\d+)", page_text, re.IGNORECASE)
 
@@ -110,19 +97,14 @@ for idx, link in enumerate(all_links):
         else:
             duration = 0
 
-        # ----------------------------
-        # Adaptive Support
-        # ----------------------------
+    
+      
         adaptive_support = "Yes" if "adaptive" in page_text.lower() else "No"
 
-        # ----------------------------
-        # Remote Support
-        # ----------------------------
+        
         remote_support = "Yes" if "remote" in page_text.lower() else "No"
 
-        # ----------------------------
-        # Test Type Extraction
-        # ----------------------------
+       
         test_type = []
 
         try:
