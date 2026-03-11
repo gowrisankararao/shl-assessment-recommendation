@@ -2,16 +2,11 @@ import pandas as pd
 import requests
 import os
 
-# -----------------------------
-# CONFIG
-# -----------------------------
 API_URL = "http://127.0.0.1:8000/recommend"
 INPUT_PATH = "shl_recommendation/evaluation/unlabeled_test.csv"
 OUTPUT_PATH = "submission_test_predictions.csv"
 
-# -----------------------------
-# LOAD TEST DATA (fix encoding)
-# -----------------------------
+
 if not os.path.exists(INPUT_PATH):
     raise FileNotFoundError(f"File not found: {INPUT_PATH}")
 
@@ -24,9 +19,7 @@ rows = []
 
 print("🚀 Generating predictions...\n")
 
-# -----------------------------
-# CALL API FOR EACH QUERY
-# -----------------------------
+
 for idx, row in test_df.iterrows():
     query = str(row["Query"]).strip()
 
@@ -54,9 +47,7 @@ for idx, row in test_df.iterrows():
         print(f"❌ Exception for query: {query}")
         print(e)
 
-# -----------------------------
-# SAVE IN REQUIRED FORMAT
-# -----------------------------
+
 if not rows:
     raise ValueError("No predictions generated. Check API.")
 
