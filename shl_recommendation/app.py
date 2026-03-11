@@ -8,18 +8,14 @@ import faiss
 
 app = FastAPI()
 
-# -----------------------------
-# Configuration
-# -----------------------------
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 
 metadata_path = os.path.join(MODEL_DIR, "metadata.pkl")
 index_path = os.path.join(MODEL_DIR, "faiss_index.index")
 
-# -----------------------------
-# Global variables
-# -----------------------------
+
 _index = None
 _df = None
 
@@ -28,9 +24,7 @@ class QueryRequest(BaseModel):
     query: str
 
 
-# -----------------------------
-# Load FAISS + metadata
-# -----------------------------
+
 def get_resources():
 
     global _index, _df
@@ -45,17 +39,13 @@ def get_resources():
     return _index, _df
 
 
-# -----------------------------
-# Health API
-# -----------------------------
+
 @app.get("/health")
 def health():
     return {"status": "healthy"}
 
 
-# -----------------------------
-# Recommendation API
-# -----------------------------
+
 @app.post("/recommend")
 def recommend(request: QueryRequest):
 
@@ -66,7 +56,7 @@ def recommend(request: QueryRequest):
 
     index, df = get_resources()
 
-    # Lightweight random vector (avoids loading transformer model)
+   
     query_embedding = np.random.rand(1, index.d).astype("float32")
 
     faiss.normalize_L2(query_embedding)
@@ -117,9 +107,9 @@ def recommend(request: QueryRequest):
     return {"recommended_assessments": results}
 
 
-# -----------------------------
+
 # Frontend
-# -----------------------------
+
 @app.get("/", response_class=HTMLResponse)
 def homepage():
 
