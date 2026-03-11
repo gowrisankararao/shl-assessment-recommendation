@@ -7,14 +7,12 @@ df = pd.read_csv(INPUT_PATH)
 
 print("Original count:", len(df))
 
-# Remove duplicates only
 df = df.drop_duplicates(subset=["url"])
 
-# Remove rows where URL is missing
+
 df = df[df["url"].notna()]
 df = df[df["url"].str.strip() != ""]
 
-# Remove rows where name is missing
 df = df[df["name"].notna()]
 df = df[df["name"].str.strip() != ""]
 
